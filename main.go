@@ -113,7 +113,7 @@ func loadPlugins(pluginPathList []string) []*plugin.Plugin {
 	pluginList = make([]*plugin.Plugin, 0, len(pluginPathList))
 	for _, p := range pluginPathList {
 		// We use plugin.Open to load the plugin by path
-		plg, err := plugin.Open("plugins/" + p)
+		plg, err := plugin.Open(p)
 		if err != nil {
 			// NOTE: in real cases, deal with this error
 			slog.Error("could not open file", "file", p, "err", err)
