@@ -60,7 +60,7 @@ func registerShutdownHook(cancel context.CancelFunc) chan os.Signal {
 }
 
 func startServices(eg *errgroup.Group, ctx context.Context) {
-	messenger := core.NewMessengerService()
+	messenger := core.NewMessengerService(eg, ctx)
 	messenger.Create()
 	messenger.Start()
 	services = append(services, messenger)
