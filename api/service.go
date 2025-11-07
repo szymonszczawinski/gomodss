@@ -2,6 +2,7 @@
 package api
 
 const (
+	// required signature NewPluginService(*errgroup.Group, context.Context, api.IMessenger) api.IPluginService
 	NewPluginServiceFunction = "NewPluginService"
 )
 
