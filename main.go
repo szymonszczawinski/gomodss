@@ -2,21 +2,64 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"log/slog"
 	"os"
+	"os/signal"
 	"plugin"
+	"syscall"
 
 	"gomodss/api"
 	"gomodss/core"
+
+	"golang.org/x/sync/errgroup"
 )
 
+var services []api.IService
+
 func main() {
-	services := []api.IService{}
+	cancelContext, cancel := context.WithCancel(context.Background())
+	signalChannel := registerShutdownHook(cancel)
+	mainGroup, groupContext := errgroup.WithContext(cancelContext)
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 	slog.Info("starting GOMODSS")
 
+	mainQueue := api.NewJobQueue("gomodss", mainGroup)
+	mainQueue.Start(groupContext)
+
+	services = []api.IService{}
+	startServices(mainGroup, groupContext)
+	slog.Info("----------------------------")
+
+	if err := mainGroup.Wait(); err == nil {
+		slog.Info("stopping GOMODSS")
+	}
+
+	defer close(signalChannel)
+	slog.Info("stoping services")
+	for _, s := range services {
+		s.Stop()
+	}
+	slog.Info("exiting GOMODSS")
+}
+
+func registerShutdownHook(cancel context.CancelFunc) chan os.Signal {
+	stop := make(chan os.Signal, 1)
+
+	signal.Notify(stop, os.Interrupt, syscall.SIGHUP, syscall.SIGQUIT, syscall.SIGINT)
+	go func() {
+		// wait until receiving the signal
+		<-stop
+		slog.Info("Shutdown SIGNAL received -> cancel context")
+		cancel()
+	}()
+
+	return stop
+}
+
+func startServices(eg *errgroup.Group, ctx context.Context) {
 	messenger := core.NewMessengerService()
 	messenger.Create()
 	messenger.Start()
@@ -29,13 +72,6 @@ func main() {
 	pluginServices := runServices(plugins, messenger)
 	services = append(services, pluginServices...)
 	slog.Info("all services running", "services", services)
-	slog.Info("----------------------------")
-
-	slog.Info("stoping GOMODSS")
-	for _, s := range services {
-		s.Stop()
-	}
-	slog.Info("exiting GOMODSS")
 }
 
 func runServices(plugins []*plugin.Plugin, messenger api.IMessenger) []api.IService {
